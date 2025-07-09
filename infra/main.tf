@@ -44,11 +44,12 @@ module "network" {
 module "ecs" {
   source = "./modules/ecs"
   
-  cluster_name = local.cluster_name
-  vpc_id       = module.network.vpc_id
-  subnets      = module.network.private_subnets
-  environment  = var.environment
-  project_name = var.project_name
+  cluster_name    = local.cluster_name
+  vpc_id          = module.network.vpc_id
+  subnets         = module.network.private_subnets
+  public_subnets  = module.network.public_subnets
+  environment     = var.environment
+  project_name    = var.project_name
   
   # ECS Task Configuration
   task_cpu       = var.task_cpu

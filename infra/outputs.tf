@@ -61,6 +61,37 @@ output "ecs_task_role_arn" {
   value       = module.ecs.task_role_arn
 }
 
+# Application Load Balancer Outputs
+output "alb_dns_name" {
+  description = "DNS name of the Application Load Balancer"
+  value       = module.ecs.alb_dns_name
+}
+
+output "alb_arn" {
+  description = "ARN of the Application Load Balancer"
+  value       = module.ecs.alb_arn
+}
+
+output "alb_zone_id" {
+  description = "Zone ID of the Application Load Balancer"
+  value       = module.ecs.alb_zone_id
+}
+
+output "alb_security_group_id" {
+  description = "ID of the ALB security group"
+  value       = module.ecs.alb_security_group_id
+}
+
+output "target_group_arn" {
+  description = "ARN of the target group"
+  value       = module.ecs.target_group_arn
+}
+
+output "application_url" {
+  description = "URL to access the application"
+  value       = "http://${module.ecs.alb_dns_name}"
+}
+
 # SSM Outputs
 output "ssm_parameter_arn" {
   description = "ARN of the SSM parameter"

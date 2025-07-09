@@ -6,9 +6,25 @@ resource "aws_ecs_cluster" "main" {
   })
 }
 
-resource "aws_security_group" "ecs_tasks" {
-  name        = "${var.project_name}-${var.environment}-ecs-tasks-sg"
-  description = "Allow inbound access from the ALB only"
+# Application Load Balancer
+resource "aws_lb" "main" {
+  name               = "${var.project_name}-${var.environment}-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb.id]
+  subnets            = var.public_subnets
+
+  enable_deletion_protection = false
+
+  tags = merge(var.tags, {
+    Name = "${var.project_name}-${var.environment}-alb"
+  })
+}
+
+# ALB Security Group
+resource "aws_security_group" "alb" {
+  name        = "${var.project_name}-${var.environment}-alb-sg"
+  description = "Controls access to the ALB"
   vpc_id      = var.vpc_id
 
   ingress {
@@ -20,9 +36,73 @@ resource "aws_security_group" "ecs_tasks" {
 
   ingress {
     protocol    = "tcp"
-    from_port   = 5000
-    to_port     = 5000
+    from_port   = 443
+    to_port     = 443
     cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    protocol    = "-1"
+    from_port   = 0
+    to_port     = 0
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(var.tags, {
+    Name = "${var.project_name}-${var.environment}-alb-sg"
+  })
+}
+
+# ALB Target Group
+resource "aws_lb_target_group" "app" {
+  name        = "${var.project_name}-${var.environment}-tg"
+  port        = var.container_port
+  protocol    = "HTTP"
+  vpc_id      = var.vpc_id
+  target_type = "ip"
+
+  health_check {
+    enabled             = true
+    healthy_threshold   = 2
+    interval            = 30
+    matcher             = "200"
+    path                = "/health"
+    port                = "traffic-port"
+    protocol            = "HTTP"
+    timeout             = 5
+    unhealthy_threshold = 2
+  }
+
+  tags = merge(var.tags, {
+    Name = "${var.project_name}-${var.environment}-tg"
+  })
+}
+
+# ALB Listener
+resource "aws_lb_listener" "app" {
+  load_balancer_arn = aws_lb.main.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.app.arn
+  }
+
+  tags = var.tags
+}
+
+# Updated ECS Tasks Security Group - restrict access to ALB only
+resource "aws_security_group" "ecs_tasks" {
+  name        = "${var.project_name}-${var.environment}-ecs-tasks-sg"
+  description = "Allow inbound access from the ALB only"
+  vpc_id      = var.vpc_id
+
+  ingress {
+    protocol        = "tcp"
+    from_port       = var.container_port
+    to_port         = var.container_port
+    security_groups = [aws_security_group.alb.id]
   }
 
   egress {
@@ -168,7 +248,7 @@ resource "aws_ecs_task_definition" "app" {
   tags = var.tags
 }
 
-# ECS Service
+# Updated ECS Service with ALB integration
 resource "aws_ecs_service" "app" {
   name            = "${var.project_name}-${var.environment}-service"
   cluster         = aws_ecs_cluster.main.id
@@ -181,6 +261,14 @@ resource "aws_ecs_service" "app" {
     subnets          = var.subnets
     assign_public_ip = false
   }
+
+  load_balancer {
+    target_group_arn = aws_lb_target_group.app.arn
+    container_name   = var.container_name
+    container_port   = var.container_port
+  }
+
+  depends_on = [aws_lb_listener.app]
 
   tags = var.tags
 }
